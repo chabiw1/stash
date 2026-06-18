@@ -1,0 +1,32 @@
+name: Daily fetch
+
+on:
+  schedule:
+    - cron: '0 1 * * *'   # 08:00 Bangkok (UTC+7)
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - run: pip install -r requirements.txt
+
+      - run: python src/fetch_dime.py
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_PASS: ${{ secrets.GMAIL_PASS }}
+          DOB: ${{ secrets.DOB }}
+
+      - name: Commit portfolio.json if changed
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add data/portfolio.json
+          git diff --staged --quiet || git commit -m "update portfolio.json"
+          git push
