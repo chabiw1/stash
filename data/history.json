@@ -1,1 +1,11 @@
-[]
+[
+  {
+    "ts": "2026-06-19T01:09:53+07:00",
+    "total_thb": 25461,
+    "cash_thb": 1,
+    "stocks_thb": 0,
+    "etf_thb": 0,
+    "crypto_thb": 25460,
+    "usd_thb_rate": 32.72
+  }
+]

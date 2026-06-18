@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wealth Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --teal: #1D9E75;
+    --purple: #534AB7;
+    --pink: #D4537E;
+    --amber: #EF9F27;
+  }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; max-width: 1200px; margin: 0 auto; }
+  h2 { font-size: 1rem; color: var(--muted); font-weight: 500; margin-bottom: 16px; }
+
+  /* Header */
+  .header { display: flex; align-items: center; gap: 16px; margin-bottom: 32px; flex-wrap: wrap; }
+  .header h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.5px; }
+  .header-meta { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 0.82rem; color: var(--muted); }
+  .badge-live { padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+
+  /* Total card */
+  .total-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px 32px; margin-bottom: 24px; display: flex; align-items: center; gap: 32px; flex-wrap: wrap; }
+  .total-thb { font-size: 2.6rem; font-weight: 800; letter-spacing: -1px; }
+  .total-usd { font-size: 1.4rem; color: var(--muted); font-weight: 500; }
+  .ytd-badge { padding: 6px 14px; border-radius: 20px; font-size: 0.9rem; font-weight: 700; }
+  .rate-note { margin-left: auto; font-size: 0.82rem; color: var(--muted); }
+
+  /* Asset cards */
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
+  @media (max-width: 900px) { .cards { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 500px) { .cards { grid-template-columns: 1fr; } }
+
+  .card { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; cursor: default; }
+  .card-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-bottom: 10px; }
+  .card-label { font-size: 0.8rem; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+  .card-thb { font-size: 1.3rem; font-weight: 700; }
+  .card-usd { font-size: 0.82rem; color: var(--muted); margin-top: 4px; }
+
+  /* Tooltip */
+  .tooltip-content {
+    display: none; position: absolute; z-index: 100; bottom: calc(100% + 8px); left: 0;
+    background: #252836; border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 16px; min-width: 220px; font-size: 0.82rem; line-height: 1.7;
+    color: var(--text); white-space: nowrap; pointer-events: none;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  .card:hover .tooltip-content { display: block; }
+
+  /* Tables */
+  .table-section { margin-bottom: 36px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  thead th { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 500; white-space: nowrap; }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody td { padding: 10px 12px; white-space: nowrap; }
+  .sym { font-weight: 700; font-family: monospace; font-size: 0.95rem; }
+
+  /* Badges */
+  .badge { padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; }
+  .badge-stock { background: rgba(83,74,183,0.2); color: #8b80f0; }
+  .badge-etf { background: rgba(212,83,126,0.2); color: #f07aaa; }
+
+  /* Chart */
+  .chart-section { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 32px; }
+  .chart-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+  .chart-toggles { display: flex; gap: 8px; }
+  .toggle-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 5px 14px; cursor: pointer; font-size: 0.82rem; transition: all 0.15s; }
+  .toggle-btn.active, .toggle-btn:hover { background: var(--teal); border-color: var(--teal); color: #fff; }
+  canvas { max-height: 320px; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <h1>Wealth Dashboard</h1>
+  <div class="header-meta">
+    <span>2026-06-19T01:09:53+07:00</span>
+    <span class="badge-live" style="background:#22c55e22;color:#22c55e;border:1px solid #22c55e44">
+      Live
+    </span>
+  </div>
+</div>
+
+<!-- Total wealth card -->
+<div class="total-card">
+  <div>
+    <div class="total-thb">฿25,461</div>
+    <div class="total-usd">$778</div>
+  </div>
+  <div class="ytd-badge" style="background:#22c55e22;color:#22c55e">
+    ▲ YTD +0.0%
+  </div>
+  <div class="rate-note">1 USD = 32.72 THB</div>
+</div>
+
+<!-- Asset class cards -->
+<div class="cards">
+  <div class="card">
+    <span class="card-dot" style="background:#1D9E75"></span>
+    <div class="card-label">Cash</div>
+    <div class="card-thb">฿1</div>
+    <div class="card-usd">$0</div>
+    <div class="tooltip-content">KBank ฿1<br>Dime USD $0</div>
+  </div>
+  <div class="card">
+    <span class="card-dot" style="background:#534AB7"></span>
+    <div class="card-label">US Stocks</div>
+    <div class="card-thb">฿0</div>
+    <div class="card-usd">$0</div>
+    <div class="tooltip-content">Dime ฿0</div>
+  </div>
+  <div class="card">
+    <span class="card-dot" style="background:#D4537E"></span>
+    <div class="card-label">ETF</div>
+    <div class="card-thb">฿0</div>
+    <div class="card-usd">$0</div>
+    <div class="tooltip-content">Dime ฿0</div>
+  </div>
+  <div class="card">
+    <span class="card-dot" style="background:#EF9F27"></span>
+    <div class="card-label">Crypto</div>
+    <div class="card-thb">฿25,460</div>
+    <div class="card-usd">$778</div>
+    <div class="tooltip-content">Binance TH ฿19,180 (75%)<br>HW Wallet ฿6,280 (25%)<br>BTC total: 0.012269 BTC</div>
+  </div>
+</div>
+
+<!-- Dime Holdings Table -->
+<div class="table-section">
+  <h2>Dime Holdings</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Symbol</th><th>Class</th><th>Shares</th>
+          <th>Price USD</th><th>Value USD</th><th>PnL %</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Crypto Table -->
+<div class="table-section">
+  <h2>Crypto</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Coin</th><th>Binance qty</th><th>HW qty</th>
+          <th>Total qty</th><th>Price THB</th><th>Value THB</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="sym">BTC</td>
+          <td>0.009207</td>
+          <td>0.003062</td>
+          <td>0.012269</td>
+          <td>฿2,051,042.00</td>
+          <td>฿25,164</td>
+        </tr>
+        <tr>
+          <td class="sym">ONDO</td>
+          <td>25.386609</td>
+          <td>—</td>
+          <td>25.386609</td>
+          <td>฿11.65</td>
+          <td>฿296</td>
+        </tr>
+        <tr>
+          <td class="sym">THB</td>
+          <td>1940.002237</td>
+          <td>—</td>
+          <td>1940.002237</td>
+          <td>—</td>
+          <td>฿0</td>
+        </tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Wealth History Chart -->
+<div class="chart-section">
+  <div class="chart-header">
+    <h2 style="margin:0">Wealth History</h2>
+    <div class="chart-toggles">
+      <button class="toggle-btn" data-months="1">1M</button>
+      <button class="toggle-btn active" data-months="3">3M</button>
+      <button class="toggle-btn" data-months="6">6M</button>
+    </div>
+  </div>
+  <canvas id="wealthChart"></canvas>
+</div>
+
+<script>
+const HISTORY = [{"ts": "2026-06-19T01:09:53+07:00", "total_thb": 25461, "cash_thb": 1, "stocks_thb": 0, "etf_thb": 0, "crypto_thb": 25460, "usd_thb_rate": 32.72}];
+
+const ctx = document.getElementById('wealthChart').getContext('2d');
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: { labels: [], datasets: [
+    {
+      label: 'Total (THB)',
+      data: [],
+      borderColor: '#1D9E75',
+      backgroundColor: 'rgba(29,158,117,0.08)',
+      yAxisID: 'y',
+      tension: 0.4,
+      pointRadius: 3,
+      fill: true,
+    },
+    {
+      label: 'Growth %',
+      data: [],
+      borderColor: '#EF9F27',
+      backgroundColor: 'transparent',
+      yAxisID: 'y1',
+      tension: 0.4,
+      pointRadius: 3,
+      borderDash: [4, 3],
+    },
+  ]},
+  options: {
+    responsive: true,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { labels: { color: '#94a3b8' } },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => {
+            if (ctx.datasetIndex === 0) return ' ฿' + ctx.raw.toLocaleString();
+            return ' ' + (ctx.raw >= 0 ? '+' : '') + ctx.raw.toFixed(2) + '%';
+          }
+        }
+      }
+    },
+    scales: {
+      x: { ticks: { color: '#64748b', maxTicksLimit: 8 }, grid: { color: '#1e2233' } },
+      y: {
+        type: 'linear', position: 'left',
+        ticks: { color: '#1D9E75', callback: (v) => '฿' + v.toLocaleString() },
+        grid: { color: '#1e2233' },
+      },
+      y1: {
+        type: 'linear', position: 'right',
+        ticks: { color: '#EF9F27', callback: (v) => (v >= 0 ? '+' : '') + v.toFixed(1) + '%' },
+        grid: { drawOnChartArea: false },
+      },
+    },
+  },
+});
+
+function updateChart(months) {
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - months);
+  const data = HISTORY.filter(e => new Date(e.ts) >= cutoff);
+  const labels = data.map(e => {
+    const d = new Date(e.ts);
+    return d.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
+  });
+  const totals = data.map(e => e.total_thb);
+  const first = totals[0] || 1;
+  const growth = totals.map(v => parseFloat(((v - first) / first * 100).toFixed(2)));
+  chart.data.labels = labels;
+  chart.data.datasets[0].data = totals;
+  chart.data.datasets[1].data = growth;
+  chart.update();
+}
+
+document.querySelectorAll('.toggle-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    updateChart(parseInt(btn.dataset.months));
+  });
+});
+
+updateChart(3);
+</script>
+</body>
+</html>
