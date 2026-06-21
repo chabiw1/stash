@@ -1,5 +1,6 @@
 import imaplib
 import email
+import email.header
 import email.utils
 import re
 import json
@@ -96,6 +97,17 @@ def get_pdf_from_msg(msg):
     return None
 
 
+def decode_subject(raw_subject):
+    parts = email.header.decode_header(raw_subject)
+    decoded = []
+    for part, charset in parts:
+        if isinstance(part, bytes):
+            decoded.append(part.decode(charset or "utf-8", errors="ignore"))
+        else:
+            decoded.append(part)
+    return " ".join(decoded)
+
+
 def parse_statement_month(subject):
     """Parse statement month from email subject. Returns a date(year, month, 1) or None."""
     # "Monthly Statement August 2025" / "Aug 2025" / "08/2025"
@@ -145,16 +157,16 @@ def parse_monthly_statement(text):
         if current_type is None:
             continue
 
-        # Match: SYMBOL  shares  avg_cost  [other fields...]
-        # PDF rows often: "TSLA 0.5164601 290.40 ..."
+        # PDF rows: "TSLA 6.25%  0.5164601  290.40  435.79  ..."
+        # Format:   SYMBOL  ALLOC%  SHARES  AVG_COST  PRICE  ...
         match = re.match(
-            r'^([A-Z]{1,5})\s+([\d,]+\.[\d]+)\s+([\d,]+\.[\d]+)',
+            r'^([A-Z]{1,5})\s+([\d.]+)%\s+([\d,]+\.[\d]+)\s+([\d,]+\.[\d]+)',
             stripped
         )
         if match:
             symbol = match.group(1)
-            shares = float(match.group(2).replace(",", ""))
-            avg_cost = float(match.group(3).replace(",", ""))
+            shares = float(match.group(3).replace(",", ""))
+            avg_cost = float(match.group(4).replace(",", ""))
             holdings[symbol] = {
                 "shares": shares,
                 "avg_cost_usd": avg_cost,
@@ -162,14 +174,15 @@ def parse_monthly_statement(text):
             }
 
     # Parse Cash Balance USD
+    # PDF format: "Cash Balance\n≈ 116,752.95 THB 60.00 USD"
     dime_cash_usd = 0.0
     patterns = [
-        r'Cash Balance\s*[\d,]+\s*USD\s*([\d,]+\.\d+)\s*USD',
+        r'(?:Cash Balance|ยอดเงินคงเหลือ).*?THB\s+([\d,]+\.\d+)\s*USD',
         r'Cash Balance[^\n]*?\s([\d,]+\.\d{2})\s*USD',
         r'Cash\s+Balance\s+([\d,]+\.\d{2})',
     ]
     for pat in patterns:
-        m = re.search(pat, text)
+        m = re.search(pat, text, re.DOTALL)
         if m:
             dime_cash_usd = float(m.group(1).replace(",", ""))
             break
@@ -189,7 +202,7 @@ def get_last_month_statement():
     latest_msg = None
     latest_month = None
     for msg in msgs:
-        subject = msg.get("Subject", "")
+        subject = decode_subject(msg.get("Subject", ""))
         month_start = parse_statement_month(subject)
         if month_start and (latest_month is None or month_start > latest_month):
             latest_month = month_start
@@ -221,8 +234,8 @@ def parse_confirmation_note(text):
     trades = []
     for line in text.split("\n"):
         stripped = line.strip()
-        match = re.match(
-            r'(BUY|SEL|SELL)\s+([A-Z]{1,5})\s+([\d,]+\.[\d]+)\s+([\d,]+\.[\d]+)',
+        match = re.search(
+            r'\b(BUY|SEL|SELL)\s+([A-Z]{1,5})\s+([\d,]+\.[\d]+)\s+([\d,]+\.[\d]+)',
             stripped, re.IGNORECASE
         )
         if match:
@@ -316,20 +329,57 @@ def last_day_of_current_month():
 def run_daily(portfolio_path):
     data = load_json(portfolio_path)
     current_month_end = last_day_of_current_month()
+    print(f"[dime] current month end: {current_month_end}")
+    print(f"[dime] stored statement_date: {data.get('statement_date')}")
 
     if data.get("statement_date") != str(current_month_end):
+        print("[dime] fetching latest monthly statement...")
         holdings_data = get_last_month_statement()
         if holdings_data:
+            print(f"[dime] got statement {holdings_data['statement_date']} — {len(holdings_data['holdings'])} holdings, cash ${holdings_data['dime_cash_usd']}")
             data.update(holdings_data)
             save_json(portfolio_path, data)
+        else:
+            print("[dime] no statement found")
+    else:
+        print("[dime] statement up to date, skipping fetch")
 
     cutoff = date.fromisoformat(data["statement_date"])
+    print(f"[dime] checking confirmation notes after {cutoff}...")
     new_trades = get_this_month_trades(cutoff)
     if new_trades:
+        print(f"[dime] {len(new_trades)} new trades found, merging...")
         merged = merge_portfolio(data["holdings"], new_trades)
         data["holdings"] = merged
         save_json(portfolio_path, data)
+    else:
+        print("[dime] no new trades")
+
+    print(f"[dime] done — {len(data['holdings'])} holdings in portfolio")
+
+
+def debug_confirmation_notes():
+    msgs = fetch_gmail_by_subject("Confirmation Note")
+    print(f"Found {len(msgs)} confirmation note emails")
+    for msg in msgs:
+        subject = decode_subject(msg.get("Subject", ""))
+        date_str = msg.get("Date", "")
+        try:
+            msg_date = email.utils.parsedate_to_datetime(date_str).date()
+        except Exception:
+            msg_date = None
+        print(f"\n--- {msg_date} | {subject} ---")
+        pdf_data = get_pdf_from_msg(msg)
+        if pdf_data:
+            text = extract_pdf_text(pdf_data, DOB)
+            print(text[:3000])
+        else:
+            print("(no PDF)")
 
 
 if __name__ == "__main__":
-    run_daily(PORTFOLIO_PATH)
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "debug-notes":
+        debug_confirmation_notes()
+    else:
+        run_daily(PORTFOLIO_PATH)

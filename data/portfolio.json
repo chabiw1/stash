@@ -1,6 +1,92 @@
 {
-  "statement_date": "2025-08-29",
-  "dime_cash_usd": 0.0,
+  "statement_date": "2026-05-31",
+  "dime_cash_usd": 60.0,
   "last_updated_dime": "",
-  "holdings": {}
+  "holdings": {
+    "AMZN": {
+      "shares": 0.5989681,
+      "avg_cost_usd": 250.03,
+      "asset_type": "stock"
+    },
+    "CEG": {
+      "shares": 0.4078431,
+      "avg_cost_usd": 367.2,
+      "asset_type": "stock"
+    },
+    "GOOG": {
+      "shares": 0.7393365,
+      "avg_cost_usd": 202.56,
+      "asset_type": "stock"
+    },
+    "IBM": {
+      "shares": 0.4846602,
+      "avg_cost_usd": 309.0,
+      "asset_type": "stock"
+    },
+    "IONQ": {
+      "shares": 3.6731182,
+      "avg_cost_usd": 68.0,
+      "asset_type": "stock"
+    },
+    "META": {
+      "shares": 0.3600311,
+      "avg_cost_usd": 693.72,
+      "asset_type": "stock"
+    },
+    "MSFT": {
+      "shares": 0.580375,
+      "avg_cost_usd": 516.08,
+      "asset_type": "stock"
+    },
+    "NVDA": {
+      "shares": 1.3921604,
+      "avg_cost_usd": 179.29,
+      "asset_type": "stock"
+    },
+    "PLTR": {
+      "shares": 0.8635184,
+      "avg_cost_usd": 173.43,
+      "asset_type": "stock"
+    },
+    "RBLX": {
+      "shares": 1.2822844,
+      "avg_cost_usd": 112.27,
+      "asset_type": "stock"
+    },
+    "RGTI": {
+      "shares": 4.8216355,
+      "avg_cost_usd": 31.06,
+      "asset_type": "stock"
+    },
+    "RKLB": {
+      "shares": 2.161039,
+      "avg_cost_usd": 46.2,
+      "asset_type": "stock"
+    },
+    "SMCI": {
+      "shares": 4.6918987,
+      "avg_cost_usd": 31.97,
+      "asset_type": "stock"
+    },
+    "TSLA": {
+      "shares": 0.5164601,
+      "avg_cost_usd": 290.4,
+      "asset_type": "stock"
+    },
+    "RSP": {
+      "shares": 0.4369176,
+      "avg_cost_usd": 186.74,
+      "asset_type": "etf"
+    },
+    "SPY": {
+      "shares": 0.9127607,
+      "avg_cost_usd": 657.0,
+      "asset_type": "etf"
+    },
+    "SCHG": {
+      "shares": 8.6065732,
+      "avg_cost_usd": 34.86,
+      "asset_type": "etf"
+    }
+  }
 }
