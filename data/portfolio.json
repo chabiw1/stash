@@ -1,6 +1,6 @@
 {
-  "statement_date": "2026-05-31",
-  "dime_cash_usd": 60.0,
+  "statement_date": "2026-06-30",
+  "dime_cash_usd": 3.04,
   "last_updated_dime": "",
   "holdings": {
     "AMZN": {
@@ -78,14 +78,14 @@
       "avg_cost_usd": 186.74,
       "asset_type": "etf"
     },
-    "SPY": {
-      "shares": 0.9127607,
-      "avg_cost_usd": 657.0,
-      "asset_type": "etf"
-    },
     "SCHG": {
       "shares": 8.6065732,
       "avg_cost_usd": 34.86,
+      "asset_type": "etf"
+    },
+    "SPY": {
+      "shares": 0.9127607,
+      "avg_cost_usd": 657.0,
       "asset_type": "etf"
     }
   }
