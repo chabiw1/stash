@@ -46,6 +46,16 @@ def fmt_usd(v):
     return f"${v:,.0f}"
 
 
+def format_last_sync(ts):
+    try:
+        dt = datetime.fromisoformat(ts)
+    except Exception:
+        return ts
+    offset = dt.strftime("%z")  # e.g. '+0700'
+    offset_short = offset[:3] if offset else ""
+    return dt.strftime("%b %-d, %Y") + " · " + dt.strftime("%I:%M %p") + " " + offset_short
+
+
 def generate_html(
     snapshot,
     history,
@@ -77,34 +87,34 @@ def generate_html(
         ytd_pct = 0
 
     ytd_sign = "+" if ytd_pct >= 0 else ""
-    ytd_color = "#22c55e" if ytd_pct >= 0 else "#ef4444"
+    ytd_color = "#00ff9c" if ytd_pct >= 0 else "#f87171"
     ytd_arrow = "▲" if ytd_pct >= 0 else "▼"
 
-    # Freshness
+    # Freshness -> two-state LIVE/STALE badge per design
     try:
         last_dt = datetime.fromisoformat(ts)
         age_hours = (datetime.now(BANGKOK) - last_dt).total_seconds() / 3600
     except Exception:
         age_hours = 999
-    fresh = age_hours < 6
-    badge_color = "#22c55e" if fresh else "#ef4444"
-    badge_text = f"Updated {int(age_hours)}h ago" if not fresh else "Live"
-    if stale_sources:
-        badge_text = "Partial: " + ", ".join(stale_sources) + " stale"
-        badge_color = "#f59e0b"
+    is_live = age_hours < 6 and not stale_sources
+    badge_color = "#00ff9c" if is_live else "#f87171"
+    badge_label = "LIVE" if is_live else "STALE"
 
-    # Tooltip details
+    last_sync = format_last_sync(ts)
+    subtitle = f"Last sync {last_sync}"
+    if stale_sources:
+        subtitle += f" · {', '.join(stale_sources)} stale"
+
+    # Tooltip details (native title attribute on summary cells)
     kbank_thb = snapshot.get("kbank_thb", 0) or 0
     dime_cash_usd = snapshot.get("dime_cash_usd", 0) or 0
-    dime_cash_thb = dime_cash_usd * usd_thb
     btc_binance = snapshot.get("btc_binance", 0) or 0
     btc_hw = snapshot.get("btc_hw", 0) or 0
     btc_price_thb = snapshot.get("btc_price_thb", 0) or 0
     binance_crypto_thb = snapshot.get("binance_crypto_thb", 0) or 0
     hw_wallet_thb = btc_hw * btc_price_thb
 
-    # Cash tooltip
-    cash_tooltip = f"KBank {fmt_thb(kbank_thb)}<br>Dime USD {fmt_usd(dime_cash_usd)}"
+    cash_tooltip = f"KBank {fmt_thb(kbank_thb)}\nDime USD {fmt_usd(dime_cash_usd)}"
     stocks_tooltip = f"Dime {fmt_thb(stocks_thb)}"
     etf_tooltip = f"Dime {fmt_thb(etf_thb)}"
     if crypto_thb > 0:
@@ -112,45 +122,60 @@ def generate_html(
         hw_pct = hw_wallet_thb / crypto_thb * 100 if crypto_thb else 0
         btc_total = btc_binance + btc_hw
         crypto_tooltip = (
-            f"Binance TH {fmt_thb(binance_crypto_thb)} ({bn_pct:.0f}%)<br>"
-            f"HW Wallet {fmt_thb(hw_wallet_thb)} ({hw_pct:.0f}%)<br>"
+            f"Binance TH {fmt_thb(binance_crypto_thb)} ({bn_pct:.0f}%)\n"
+            f"HW Wallet {fmt_thb(hw_wallet_thb)} ({hw_pct:.0f}%)\n"
             f"BTC total: {btc_total:.6f} BTC"
         )
     else:
         crypto_tooltip = "No crypto data"
 
-    # Holdings table rows
+    summary_cards = [
+        {"label": "Cash", "color": "#2dd4bf", "thb": cash_thb, "usd": cash_usd, "tooltip": cash_tooltip},
+        {"label": "US Stocks", "color": "#a78bfa", "thb": stocks_thb, "usd": stocks_usd, "tooltip": stocks_tooltip},
+        {"label": "ETF", "color": "#f472b6", "thb": etf_thb, "usd": etf_usd, "tooltip": etf_tooltip},
+        {"label": "Crypto", "color": "#fbbf24", "thb": crypto_thb, "usd": crypto_usd, "tooltip": crypto_tooltip},
+    ]
+    summary_cards_html = "".join(f"""
+      <div class="summary-cell" title="{c['tooltip']}">
+        <div class="summary-label" style="color:{c['color']}">{c['label']}</div>
+        <div class="summary-thb">฿{c['thb']:,.0f}</div>
+        <div class="summary-usd">${c['usd']:,.0f}</div>
+      </div>""" for c in summary_cards)
+
+    # Holdings table rows (pre-sorted by value desc; JS re-sorts client-side)
     holdings_rows_html = ""
     for row in sorted(dime_holdings_rows, key=lambda x: x["value_usd"], reverse=True):
         pnl = row["pnl_pct"]
-        pnl_color = "#22c55e" if pnl >= 0 else "#ef4444"
+        pnl_color = "#34d399" if pnl >= 0 else "#f87171"
         pnl_sign = "+" if pnl >= 0 else ""
-        badge_cls = "badge-stock" if row["asset_type"] == "stock" else "badge-etf"
-        badge_label = "Stock" if row["asset_type"] == "stock" else "ETF"
+        is_etf = row["asset_type"] == "etf"
+        badge_fg = "#f9a8d4" if is_etf else "#c4b5fd"
+        type_label = "ETF" if is_etf else "Stock"
         holdings_rows_html += f"""
-        <tr>
-          <td class="sym">{row['symbol']}</td>
-          <td><span class="badge {badge_cls}">{badge_label}</span></td>
-          <td>{row['shares']:.6f}</td>
-          <td>${row['price_usd']:,.2f}</td>
-          <td>${row['value_usd']:,.2f}</td>
-          <td style="color:{pnl_color};font-weight:600">{pnl_sign}{pnl:.1f}%</td>
-        </tr>"""
+      <div class="row6" data-symbol="{row['symbol']}" data-type="{type_label}" data-shares="{row['shares']}" data-price="{row['price_usd']}" data-value="{row['value_usd']}" data-pnl="{pnl}">
+        <div class="sym">{row['symbol']}</div>
+        <div><span class="type-badge" style="border-color:{badge_fg};color:{badge_fg}">[{type_label}]</span></div>
+        <div class="num muted">{row['shares']:.6f}</div>
+        <div class="num muted">${row['price_usd']:,.2f}</div>
+        <div class="num">${row['value_usd']:,.2f}</div>
+        <div class="num pnl" style="color:{pnl_color}">{pnl_sign}{pnl:.1f}%</div>
+      </div>"""
 
-    # Crypto table rows
+    # Crypto table rows (pre-sorted by value desc; JS re-sorts client-side)
     crypto_rows_html = ""
     for row in sorted(crypto_rows, key=lambda x: x["value_thb"], reverse=True):
-        hw_qty = f"{row['hw_qty']:.6f}" if row["hw_qty"] else "—"
+        hw_qty_num = row["hw_qty"] or 0
+        hw_qty_str = f"{row['hw_qty']:.6f}" if row["hw_qty"] else "—"
         price_str = f"฿{row['price_thb']:,.2f}" if row["price_thb"] else "—"
         crypto_rows_html += f"""
-        <tr>
-          <td class="sym">{row['coin']}</td>
-          <td>{row['binance_qty']:.6f}</td>
-          <td>{hw_qty}</td>
-          <td>{row['total_qty']:.6f}</td>
-          <td>{price_str}</td>
-          <td>{fmt_thb(row['value_thb'])}</td>
-        </tr>"""
+      <div class="row6c" data-coin="{row['coin']}" data-exch="{row['binance_qty']}" data-wallet="{hw_qty_num}" data-total="{row['total_qty']}" data-price="{row['price_thb']}" data-value="{row['value_thb']}">
+        <div class="sym">{row['coin']}</div>
+        <div class="num muted">{row['binance_qty']:.6f}</div>
+        <div class="num muted">{hw_qty_str}</div>
+        <div class="num">{row['total_qty']:.6f}</div>
+        <div class="num muted">{price_str}</div>
+        <div class="num">{fmt_thb(row['value_thb'])}</div>
+      </div>"""
 
     history_json = json.dumps(history)
 
@@ -160,267 +185,282 @@ def generate_html(
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Wealth Dashboard</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  :root {{
-    --bg: #0f1117;
-    --surface: #1a1d27;
-    --border: #2a2d3a;
-    --text: #e2e8f0;
-    --muted: #94a3b8;
-    --teal: #1D9E75;
-    --purple: #534AB7;
-    --pink: #D4537E;
-    --amber: #EF9F27;
+  *, *::before, *::after {{ box-sizing: border-box; }}
+  body {{ margin: 0; background: #050608; font-family: 'JetBrains Mono', monospace; }}
+
+  .wrap {{
+    max-width: 1200px; margin: 0 auto; padding: 32px 20px 80px; background: #050608;
+    background-image: linear-gradient(rgba(255,255,255,0.025) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,0.025) 1px,transparent 1px);
+    background-size: 24px 24px; color: #d5d9e0; min-height: 100vh;
   }}
-  body {{ background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; max-width: 1200px; margin: 0 auto; }}
-  h2 {{ font-size: 1rem; color: var(--muted); font-weight: 500; margin-bottom: 16px; }}
 
-  /* Header */
-  .header {{ display: flex; align-items: center; gap: 16px; margin-bottom: 32px; flex-wrap: wrap; }}
-  .header h1 {{ font-size: 1.4rem; font-weight: 700; letter-spacing: -0.5px; }}
-  .header-meta {{ margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 0.82rem; color: var(--muted); }}
-  .badge-live {{ padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }}
+  .header-row {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 16px; flex-wrap: wrap; gap: 12px; }}
+  .title {{ font-size: 19px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; color: #f2f4f7; }}
+  .subtitle {{ font-size: 12px; color: #6b7280; margin-top: 4px; }}
+  .status-badge {{ display: flex; align-items: center; gap: 6px; border: 1px solid; padding: 5px 12px; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; }}
+  .status-dot {{ width: 6px; height: 6px; display: inline-block; }}
 
-  /* Total card */
-  .total-card {{ background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px 32px; margin-bottom: 24px; display: flex; align-items: center; gap: 32px; flex-wrap: wrap; }}
-  .total-thb {{ font-size: 2.6rem; font-weight: 800; letter-spacing: -1px; }}
-  .total-usd {{ font-size: 1.4rem; color: var(--muted); font-weight: 500; }}
-  .ytd-badge {{ padding: 6px 14px; border-radius: 20px; font-size: 0.9rem; font-weight: 700; }}
-  .rate-note {{ margin-left: auto; font-size: 0.82rem; color: var(--muted); }}
+  .hero-card {{ border: 1px solid rgba(255,255,255,0.14); padding: 28px; margin-bottom: 16px; }}
+  .hero-eyebrow {{ font-size: 11px; color: #6b7280; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 10px; }}
+  .hero-num-row {{ display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }}
+  .hero-num {{ font-size: 46px; font-weight: 800; letter-spacing: -0.01em; color: #f2f4f7; }}
+  .hero-usd {{ font-size: 18px; color: #8b93a0; }}
+  .hero-meta-row {{ display: flex; align-items: center; gap: 16px; margin-top: 14px; flex-wrap: wrap; }}
+  .ytd {{ font-size: 13px; font-weight: 700; }}
+  .fx-note {{ font-size: 12px; color: #6b7280; }}
 
-  /* Asset cards */
-  .cards {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }}
-  @media (max-width: 900px) {{ .cards {{ grid-template-columns: repeat(2, 1fr); }} }}
-  @media (max-width: 500px) {{ .cards {{ grid-template-columns: 1fr; }} }}
+  .summary-grid {{ display: grid; grid-template-columns: repeat(4,1fr); gap: 1px; background: rgba(255,255,255,0.14); margin-bottom: 16px; }}
+  .summary-cell {{ background: #050608; padding: 16px; }}
+  .summary-label {{ font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 8px; }}
+  .summary-thb {{ font-size: 19px; font-weight: 700; color: #f2f4f7; }}
+  .summary-usd {{ font-size: 12px; color: #6b7280; margin-top: 4px; }}
 
-  .card {{ position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; cursor: default; }}
-  .card-dot {{ width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-bottom: 10px; }}
-  .card-label {{ font-size: 0.8rem; color: var(--muted); margin-bottom: 6px; font-weight: 500; }}
-  .card-thb {{ font-size: 1.3rem; font-weight: 700; }}
-  .card-usd {{ font-size: 0.82rem; color: var(--muted); margin-top: 4px; }}
+  .panel {{ border: 1px solid rgba(255,255,255,0.14); padding: 20px; margin-bottom: 16px; }}
+  .panel-label {{ font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #8b93a0; margin-bottom: 12px; }}
 
-  /* Tooltip */
-  .tooltip-content {{
-    display: none; position: absolute; z-index: 100; bottom: calc(100% + 8px); left: 0;
-    background: #252836; border: 1px solid var(--border); border-radius: 10px;
-    padding: 12px 16px; min-width: 220px; font-size: 0.82rem; line-height: 1.7;
-    color: var(--text); white-space: nowrap; pointer-events: none;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  .headrow6, .row6 {{ display: grid; grid-template-columns: 0.8fr 1fr 0.8fr 1fr 1fr 0.8fr; }}
+  .headrow6c, .row6c {{ display: grid; grid-template-columns: 0.8fr 1fr 1fr 1fr 1fr 1fr; }}
+  .headrow6, .headrow6c {{ color: #6b7280; font-size: 11px; text-transform: uppercase; padding: 0 6px 6px; }}
+  .headrow6 > div, .headrow6c > div {{ cursor: pointer; user-select: none; }}
+  .headrow6 > div:hover, .headrow6c > div:hover {{ color: #d5d9e0; }}
+  .row6, .row6c {{ align-items: center; font-size: 13px; padding: 8px 6px; border-top: 1px solid rgba(255,255,255,0.08); }}
+  .row6:hover, .row6c:hover {{ background: rgba(255,255,255,0.045); }}
+  .sym {{ font-weight: 700; color: #f2f4f7; }}
+  .num {{ text-align: right; }}
+  .muted {{ color: #9aa1ac; }}
+  .pnl {{ font-weight: 700; }}
+  .type-badge {{ font-size: 10px; font-weight: 700; padding: 2px 6px; border: 1px solid; }}
+
+  .headrow6 > div:nth-child(1), .headrow6 > div:nth-child(2),
+  .row6 > div:nth-child(1), .row6 > div:nth-child(2) {{ text-align: left; }}
+  .headrow6 > div:nth-child(n+3) {{ text-align: right; }}
+  .headrow6c > div:nth-child(1), .row6c > div:nth-child(1) {{ text-align: left; }}
+  .headrow6c > div:nth-child(n+2) {{ text-align: right; }}
+
+  .chart-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }}
+  .chart-label {{ font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #8b93a0; }}
+  .seg-control {{ display: flex; gap: 1px; border: 1px solid rgba(255,255,255,0.25); }}
+  .seg-btn {{ border: none; padding: 5px 12px; font-size: 11px; font-weight: 700; cursor: pointer; font-family: 'JetBrains Mono', monospace; background: transparent; color: #6b7280; }}
+  .seg-btn.active {{ background: #00ff9c; color: #050608; }}
+  #wealthChart {{ width: 100%; height: 180px; display: block; cursor: crosshair; }}
+
+  @media (max-width: 720px) {{
+    .summary-grid {{ grid-template-columns: repeat(2,1fr); }}
+    .hero-num {{ font-size: 32px; }}
+    .tablewrap {{ overflow-x: auto; }}
+    .row6, .headrow6 {{ min-width: 560px; }}
+    .row6c, .headrow6c {{ min-width: 520px; }}
   }}
-  .card:hover .tooltip-content {{ display: block; }}
-
-  /* Tables */
-  .table-section {{ margin-bottom: 36px; }}
-  .table-wrap {{ overflow-x: auto; }}
-  table {{ width: 100%; border-collapse: collapse; font-size: 0.88rem; }}
-  thead th {{ text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 500; white-space: nowrap; }}
-  tbody tr {{ border-bottom: 1px solid var(--border); }}
-  tbody tr:last-child {{ border-bottom: none; }}
-  tbody td {{ padding: 10px 12px; white-space: nowrap; }}
-  .sym {{ font-weight: 700; font-family: monospace; font-size: 0.95rem; }}
-
-  /* Badges */
-  .badge {{ padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; }}
-  .badge-stock {{ background: rgba(83,74,183,0.2); color: #8b80f0; }}
-  .badge-etf {{ background: rgba(212,83,126,0.2); color: #f07aaa; }}
-
-  /* Chart */
-  .chart-section {{ background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 32px; }}
-  .chart-header {{ display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }}
-  .chart-toggles {{ display: flex; gap: 8px; }}
-  .toggle-btn {{ background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 5px 14px; cursor: pointer; font-size: 0.82rem; transition: all 0.15s; }}
-  .toggle-btn.active, .toggle-btn:hover {{ background: var(--teal); border-color: var(--teal); color: #fff; }}
-  canvas {{ max-height: 320px; }}
 </style>
 </head>
 <body>
 
-<!-- Header -->
-<div class="header">
-  <h1>Wealth Dashboard</h1>
-  <div class="header-meta">
-    <span>{ts}</span>
-    <span class="badge-live" style="background:{badge_color}22;color:{badge_color};border:1px solid {badge_color}44">
-      {badge_text}
-    </span>
-  </div>
-</div>
+<div class="wrap" data-screen-label="Wealth Dashboard">
 
-<!-- Total wealth card -->
-<div class="total-card">
-  <div>
-    <div class="total-thb">{fmt_thb(total_thb)}</div>
-    <div class="total-usd">{fmt_usd(total_usd)}</div>
-  </div>
-  <div class="ytd-badge" style="background:{ytd_color}22;color:{ytd_color}">
-    {ytd_arrow} YTD {ytd_sign}{ytd_pct:.1f}%
-  </div>
-  <div class="rate-note">1 USD = {usd_thb:.2f} THB</div>
-</div>
-
-<!-- Asset class cards -->
-<div class="cards">
-  <div class="card">
-    <span class="card-dot" style="background:#1D9E75"></span>
-    <div class="card-label">Cash</div>
-    <div class="card-thb">{fmt_thb(cash_thb)}</div>
-    <div class="card-usd">{fmt_usd(cash_usd)}</div>
-    <div class="tooltip-content">{cash_tooltip}</div>
-  </div>
-  <div class="card">
-    <span class="card-dot" style="background:#534AB7"></span>
-    <div class="card-label">US Stocks</div>
-    <div class="card-thb">{fmt_thb(stocks_thb)}</div>
-    <div class="card-usd">{fmt_usd(stocks_usd)}</div>
-    <div class="tooltip-content">{stocks_tooltip}</div>
-  </div>
-  <div class="card">
-    <span class="card-dot" style="background:#D4537E"></span>
-    <div class="card-label">ETF</div>
-    <div class="card-thb">{fmt_thb(etf_thb)}</div>
-    <div class="card-usd">{fmt_usd(etf_usd)}</div>
-    <div class="tooltip-content">{etf_tooltip}</div>
-  </div>
-  <div class="card">
-    <span class="card-dot" style="background:#EF9F27"></span>
-    <div class="card-label">Crypto</div>
-    <div class="card-thb">{fmt_thb(crypto_thb)}</div>
-    <div class="card-usd">{fmt_usd(crypto_usd)}</div>
-    <div class="tooltip-content">{crypto_tooltip}</div>
-  </div>
-</div>
-
-<!-- Dime Holdings Table -->
-<div class="table-section">
-  <h2>Dime Holdings</h2>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Symbol</th><th>Class</th><th>Shares</th>
-          <th>Price USD</th><th>Value USD</th><th>PnL %</th>
-        </tr>
-      </thead>
-      <tbody>{holdings_rows_html}</tbody>
-    </table>
-  </div>
-</div>
-
-<!-- Crypto Table -->
-<div class="table-section">
-  <h2>Crypto</h2>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Coin</th><th>Binance qty</th><th>HW qty</th>
-          <th>Total qty</th><th>Price THB</th><th>Value THB</th>
-        </tr>
-      </thead>
-      <tbody>{crypto_rows_html}</tbody>
-    </table>
-  </div>
-</div>
-
-<!-- Wealth History Chart -->
-<div class="chart-section">
-  <div class="chart-header">
-    <h2 style="margin:0">Wealth History</h2>
-    <div class="chart-toggles">
-      <button class="toggle-btn" data-months="1">1M</button>
-      <button class="toggle-btn active" data-months="3">3M</button>
-      <button class="toggle-btn" data-months="6">6M</button>
+  <div class="header-row">
+    <div>
+      <div class="title">Wealth Dashboard</div>
+      <div class="subtitle">{subtitle}</div>
+    </div>
+    <div class="status-badge" style="border-color:{badge_color};color:{badge_color}">
+      <span class="status-dot" style="background:{badge_color};box-shadow:0 0 6px {badge_color}"></span>[ {badge_label} ]
     </div>
   </div>
-  <canvas id="wealthChart"></canvas>
+
+  <div class="hero-card">
+    <div class="hero-eyebrow">Total Net Worth</div>
+    <div class="hero-num-row">
+      <div class="hero-num">฿{total_thb:,.0f}</div>
+      <div class="hero-usd">${total_usd:,.0f} USD</div>
+    </div>
+    <div class="hero-meta-row">
+      <div class="ytd" style="color:{ytd_color}">{ytd_arrow} {ytd_sign}{ytd_pct:.1f}% YTD</div>
+      <div class="fx-note">FX 1 USD = {usd_thb:.2f} THB</div>
+    </div>
+  </div>
+
+  <div class="summary-grid">{summary_cards_html}
+  </div>
+
+  <div class="panel">
+    <div class="panel-label">Holdings</div>
+    <div class="tablewrap">
+      <div class="headrow6" id="holdHead">
+        <div data-key="symbol" data-type="text">Sym<span class="arrow"></span></div>
+        <div data-key="type" data-type="text">Type<span class="arrow"></span></div>
+        <div data-key="shares" data-type="num">Shares<span class="arrow"></span></div>
+        <div data-key="price" data-type="num">Price<span class="arrow"></span></div>
+        <div data-key="value" data-type="num">Value<span class="arrow"></span></div>
+        <div data-key="pnl" data-type="num">PnL<span class="arrow"></span></div>
+      </div>
+      <div id="holdBody">{holdings_rows_html}
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-label">Crypto</div>
+    <div class="tablewrap">
+      <div class="headrow6c" id="cryptoHead">
+        <div data-key="coin" data-type="text">Coin<span class="arrow"></span></div>
+        <div data-key="exch" data-type="num">Exch<span class="arrow"></span></div>
+        <div data-key="wallet" data-type="num">HW<span class="arrow"></span></div>
+        <div data-key="total" data-type="num">Total<span class="arrow"></span></div>
+        <div data-key="price" data-type="num">Price<span class="arrow"></span></div>
+        <div data-key="value" data-type="num">Value<span class="arrow"></span></div>
+      </div>
+      <div id="cryptoBody">{crypto_rows_html}
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="chart-header">
+      <div class="chart-label">Wealth / Time</div>
+      <div class="seg-control">
+        <button class="seg-btn" data-months="1">1M</button>
+        <button class="seg-btn" data-months="3">3M</button>
+        <button class="seg-btn active" data-months="6">6M</button>
+      </div>
+    </div>
+    <svg id="wealthChart" viewBox="0 0 600 180">
+      <polygon id="chartArea" points="" fill="#00ff9c" opacity="0.08"></polygon>
+      <polyline id="chartLine" points="" fill="none" stroke="#00ff9c" stroke-width="1.5"></polyline>
+      <g id="hoverGroup" style="display:none">
+        <line id="hoverLine" x1="0" y1="0" x2="0" y2="180" stroke="rgba(255,255,255,0.2)" stroke-width="1"></line>
+        <circle id="hoverDot" cx="0" cy="0" r="3.5" fill="#00ff9c" stroke="#050608" stroke-width="1.5"></circle>
+        <rect id="hoverBox" x="0" y="6" width="86" height="20" fill="#0b0d10" stroke="rgba(255,255,255,0.2)"></rect>
+        <text id="hoverText" x="0" y="20" fill="#00ff9c" font-size="11" font-family="'JetBrains Mono',monospace"></text>
+      </g>
+    </svg>
+  </div>
+
 </div>
 
 <script>
 const HISTORY = {history_json};
 
-const ctx = document.getElementById('wealthChart').getContext('2d');
-const chart = new Chart(ctx, {{
-  type: 'line',
-  data: {{ labels: [], datasets: [
-    {{
-      label: 'Total (THB)',
-      data: [],
-      borderColor: '#1D9E75',
-      backgroundColor: 'rgba(29,158,117,0.08)',
-      yAxisID: 'y',
-      tension: 0.4,
-      pointRadius: 3,
-      fill: true,
-    }},
-    {{
-      label: 'Growth %',
-      data: [],
-      borderColor: '#EF9F27',
-      backgroundColor: 'transparent',
-      yAxisID: 'y1',
-      tension: 0.4,
-      pointRadius: 3,
-      borderDash: [4, 3],
-    }},
-  ]}},
-  options: {{
-    responsive: true,
-    interaction: {{ mode: 'index', intersect: false }},
-    plugins: {{
-      legend: {{ labels: {{ color: '#94a3b8' }} }},
-      tooltip: {{
-        callbacks: {{
-          label: (ctx) => {{
-            if (ctx.datasetIndex === 0) return ' ฿' + ctx.raw.toLocaleString();
-            return ' ' + (ctx.raw >= 0 ? '+' : '') + ctx.raw.toFixed(2) + '%';
-          }}
-        }}
-      }}
-    }},
-    scales: {{
-      x: {{ ticks: {{ color: '#64748b', maxTicksLimit: 8 }}, grid: {{ color: '#1e2233' }} }},
-      y: {{
-        type: 'linear', position: 'left',
-        ticks: {{ color: '#1D9E75', callback: (v) => '฿' + v.toLocaleString() }},
-        grid: {{ color: '#1e2233' }},
-      }},
-      y1: {{
-        type: 'linear', position: 'right',
-        ticks: {{ color: '#EF9F27', callback: (v) => (v >= 0 ? '+' : '') + v.toFixed(1) + '%' }},
-        grid: {{ drawOnChartArea: false }},
-      }},
-    }},
-  }},
-}});
+function makeSortable(headId, bodyId, defaultKey, defaultDir) {{
+  const head = document.getElementById(headId);
+  const body = document.getElementById(bodyId);
+  const cells = Array.from(head.children);
+  const state = {{ key: defaultKey, dir: defaultDir }};
 
-function updateChart(months) {{
-  const cutoff = new Date();
-  cutoff.setMonth(cutoff.getMonth() - months);
-  const data = HISTORY.filter(e => new Date(e.ts) >= cutoff);
-  const labels = data.map(e => {{
-    const d = new Date(e.ts);
-    return d.toLocaleDateString('en-GB', {{ month: 'short', day: 'numeric' }});
+  function applyArrows() {{
+    cells.forEach(c => {{
+      const arrow = c.querySelector('.arrow');
+      arrow.textContent = c.dataset.key === state.key ? (state.dir === 1 ? ' ▲' : ' ▼') : '';
+    }});
+  }}
+
+  function sortRows() {{
+    const cell = cells.find(c => c.dataset.key === state.key);
+    const isText = cell.dataset.type === 'text';
+    const rows = Array.from(body.children);
+    rows.sort((a, b) => {{
+      const av = a.dataset[state.key], bv = b.dataset[state.key];
+      if (isText) return av.localeCompare(bv) * state.dir;
+      return (parseFloat(av) - parseFloat(bv)) * state.dir;
+    }});
+    rows.forEach(r => body.appendChild(r));
+  }}
+
+  cells.forEach(c => {{
+    c.addEventListener('click', () => {{
+      const key = c.dataset.key;
+      if (state.key === key) {{ state.dir = -state.dir; }}
+      else {{ state.key = key; state.dir = c.dataset.type === 'text' ? 1 : -1; }}
+      applyArrows();
+      sortRows();
+    }});
   }});
-  const totals = data.map(e => e.total_thb);
-  const first = totals[0] || 1;
-  const growth = totals.map(v => parseFloat(((v - first) / first * 100).toFixed(2)));
-  chart.data.labels = labels;
-  chart.data.datasets[0].data = totals;
-  chart.data.datasets[1].data = growth;
-  chart.update();
+
+  applyArrows();
+  sortRows();
 }}
 
-document.querySelectorAll('.toggle-btn').forEach(btn => {{
+makeSortable('holdHead', 'holdBody', 'value', -1);
+makeSortable('cryptoHead', 'cryptoBody', 'value', -1);
+
+const svg = document.getElementById('wealthChart');
+const lineEl = document.getElementById('chartLine');
+const areaEl = document.getElementById('chartArea');
+const hoverGroup = document.getElementById('hoverGroup');
+const hoverLine = document.getElementById('hoverLine');
+const hoverDot = document.getElementById('hoverDot');
+const hoverBox = document.getElementById('hoverBox');
+const hoverText = document.getElementById('hoverText');
+
+let currentCoords = [];
+let currentValues = [];
+
+function buildPath(pts) {{
+  const w = 600, h = 180, padX = 12, padY = 14;
+  const min = Math.min(...pts), max = Math.max(...pts);
+  const span = (max - min) || 1;
+  const stepX = (w - padX * 2) / (pts.length - 1 || 1);
+  const coords = pts.map((v, i) => {{
+    const x = padX + i * stepX;
+    const y = padY + (h - padY * 2) * (1 - (v - min) / span);
+    return [x, y];
+  }});
+  const path = coords.map(c => c.join(',')).join(' ');
+  const area = padX + ',' + (h - padY) + ' ' + path + ' ' + (padX + stepX * (pts.length - 1)) + ',' + (h - padY);
+  return {{ path, area, coords }};
+}}
+
+function renderChart(months) {{
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - months);
+  const filtered = HISTORY.filter(e => new Date(e.ts) >= cutoff);
+  const data = filtered.length ? filtered : HISTORY;
+  const pts = data.map(e => e.total_thb);
+  const built = buildPath(pts);
+  lineEl.setAttribute('points', built.path);
+  areaEl.setAttribute('points', built.area);
+  currentCoords = built.coords;
+  currentValues = pts;
+  hoverGroup.style.display = 'none';
+}}
+
+svg.addEventListener('mousemove', (e) => {{
+  if (!currentCoords.length) return;
+  const rect = svg.getBoundingClientRect();
+  const scaleX = 600 / rect.width;
+  const vx = (e.clientX - rect.left) * scaleX;
+  let best = 0, bestDist = Infinity;
+  currentCoords.forEach((c, i) => {{
+    const d = Math.abs(c[0] - vx);
+    if (d < bestDist) {{ bestDist = d; best = i; }}
+  }});
+  const [x, y] = currentCoords[best];
+  hoverGroup.style.display = '';
+  hoverLine.setAttribute('x1', x); hoverLine.setAttribute('x2', x);
+  hoverDot.setAttribute('cx', x); hoverDot.setAttribute('cy', y);
+  let boxX, textX, anchor = 'start';
+  if (x > 480) {{ boxX = x - 92; textX = x - 86; }}
+  else {{ boxX = x + 6; textX = x + 12; }}
+  hoverBox.setAttribute('x', boxX);
+  hoverText.setAttribute('x', textX);
+  hoverText.setAttribute('text-anchor', anchor);
+  hoverText.textContent = '฿' + Math.round(currentValues[best]).toLocaleString('en-US');
+}});
+
+svg.addEventListener('mouseleave', () => {{ hoverGroup.style.display = 'none'; }});
+
+document.querySelectorAll('.seg-btn').forEach(btn => {{
   btn.addEventListener('click', () => {{
-    document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    updateChart(parseInt(btn.dataset.months));
+    renderChart(parseInt(btn.dataset.months, 10));
   }});
 }});
 
-updateChart(3);
+renderChart(6);
 </script>
 </body>
 </html>"""
