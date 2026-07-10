@@ -1483,5 +1483,14 @@
     "etf_thb": 35918,
     "crypto_thb": 28099,
     "usd_thb_rate": 33.36
+  },
+  {
+    "ts": "2026-07-10T09:56:45+07:00",
+    "total_thb": 152260,
+    "cash_thb": 10201,
+    "stocks_thb": 77868,
+    "etf_thb": 35821,
+    "crypto_thb": 28370,
+    "usd_thb_rate": 33.27
   }
 ]
