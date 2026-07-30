@@ -25,6 +25,16 @@ jobs:
           GMAIL_PASS: ${{ secrets.GMAIL_PASS }}
           DOB: ${{ secrets.DOB }}
 
+      - run: python src/build_notion.py
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DB_HISTORY: ${{ secrets.NOTION_DB_HISTORY }}
+          NOTION_DB_HOLDINGS: ${{ secrets.NOTION_DB_HOLDINGS }}
+          NOTION_DB_CRYPTO: ${{ secrets.NOTION_DB_CRYPTO }}
+          BINANCE_API_KEY: ${{ secrets.BINANCE_API_KEY }}
+          BINANCE_SECRET_KEY: ${{ secrets.BINANCE_SECRET_KEY }}
+          BTC_ADDRESS: ${{ secrets.BTC_ADDRESS }}
+
       - name: Commit portfolio.json if changed
         run: |
           git config user.email "actions@github.com"

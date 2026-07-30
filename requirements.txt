@@ -3,3 +3,4 @@ PyPDF2
 pdfplumber
 yfinance
 python-dateutil
+notion-client
