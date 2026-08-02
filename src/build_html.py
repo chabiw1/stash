@@ -35,7 +35,7 @@ def save_json(path, data):
 
 
 def now_bangkok_iso():
-    return datetime.now(BANGKOK).isoformat(timespec="seconds")
+    return datetime.now(BANGKOK).strftime("%Y-%m-%d")
 
 
 def fmt_thb(v):
@@ -49,11 +49,9 @@ def fmt_usd(v):
 def format_last_sync(ts):
     try:
         dt = datetime.fromisoformat(ts)
+        return dt.strftime("%b %-d, %Y")
     except Exception:
         return ts
-    offset = dt.strftime("%z")  # e.g. '+0700'
-    offset_short = offset[:3] if offset else ""
-    return dt.strftime("%b %-d, %Y") + " · " + dt.strftime("%I:%M %p") + " " + offset_short
 
 
 def generate_html(

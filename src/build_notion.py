@@ -66,10 +66,11 @@ def archive_all(db_id):
 
 
 def push_history_entry(entry):
+    date_only = entry["ts"][:10]
     notion_post("pages", {
         "parent": {"database_id": DB_HISTORY},
         "properties": {
-            "Timestamp":    {"title": [{"text": {"content": entry["ts"]}}]},
+            "Timestamp":    {"title": [{"text": {"content": date_only}}]},
             "Total (THB)":  {"number": entry["total_thb"]},
             "Cash (THB)":   {"number": entry["cash_thb"]},
             "Stocks (THB)": {"number": entry["stocks_thb"]},
