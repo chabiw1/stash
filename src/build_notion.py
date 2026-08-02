@@ -22,6 +22,7 @@ NOTION_TOKEN = os.environ.get("NOTION_TOKEN", "")
 DB_HISTORY = os.environ.get("NOTION_DB_HISTORY", "")
 DB_HOLDINGS = os.environ.get("NOTION_DB_HOLDINGS", "")
 DB_CRYPTO = os.environ.get("NOTION_DB_CRYPTO", "")
+STATS_PAGE = os.environ.get("NOTION_STATS_PAGE", "3b06e648-e512-8174-9a14-ebc9ec99a0ae")
 
 BINANCE_API_KEY = os.environ.get("BINANCE_API_KEY", "")
 BINANCE_SECRET_KEY = os.environ.get("BINANCE_SECRET_KEY", "")
@@ -49,6 +50,11 @@ def notion_query(db_id):
     return r.json().get("results", [])
 
 
+def notion_patch(path, data):
+    r = requests.patch(f"https://api.notion.com/v1/{path}", headers=headers(), json=data, timeout=15)
+    return r.json()
+
+
 def archive_all(db_id):
     pages = notion_query(db_id)
     for p in pages:
@@ -56,6 +62,70 @@ def archive_all(db_id):
             f"https://api.notion.com/v1/pages/{p['id']}",
             headers=headers(), json={"archived": True}, timeout=15
         )
+
+
+def clear_page_blocks(page_id):
+    r = requests.get(f"https://api.notion.com/v1/blocks/{page_id}/children", headers=headers(), timeout=15)
+    for b in r.json().get("results", []):
+        requests.delete(f"https://api.notion.com/v1/blocks/{b['id']}", headers=headers(), timeout=15)
+
+
+def push_stats_page(latest, usd_thb):
+    clear_page_blocks(STATS_PAGE)
+    total = latest["total_thb"]
+    cash = latest["cash_thb"]
+    stocks_etf = latest["stocks_thb"] + latest["etf_thb"]
+    crypto = latest["crypto_thb"]
+    total_usd = total / usd_thb if usd_thb else 0
+    ts = latest["ts"]
+
+    def callout(emoji, title, value_thb, color):
+        return {
+            "object": "block", "type": "callout",
+            "callout": {
+                "rich_text": [
+                    {"type": "text", "text": {"content": f"{title}\n"}, "annotations": {"bold": True}},
+                    {"type": "text", "text": {"content": f"฿{value_thb:,}"}},
+                ],
+                "icon": {"type": "emoji", "emoji": emoji},
+                "color": color,
+            },
+        }
+
+    blocks = [
+        {
+            "object": "block", "type": "heading_2",
+            "heading_2": {"rich_text": [{"type": "text", "text": {"content": "Portfolio Overview"}}]},
+        },
+        {
+            "object": "block", "type": "callout",
+            "callout": {
+                "rich_text": [
+                    {"type": "text", "text": {"content": "NET WORTH\n"}, "annotations": {"bold": True}},
+                    {"type": "text", "text": {"content": f"฿{total:,}"}, "annotations": {"bold": True}},
+                    {"type": "text", "text": {"content": f"  (~${total_usd:,.0f} USD)"}, "annotations": {"color": "gray"}},
+                ],
+                "icon": {"type": "emoji", "emoji": "💰"},
+                "color": "green_background",
+            },
+        },
+        {"object": "block", "type": "divider", "divider": {}},
+        callout("📈", "Stocks & ETF", stocks_etf, "blue_background"),
+        callout("🪙", "Crypto", crypto, "purple_background"),
+        callout("💵", "Cash", cash, "gray_background"),
+        {"object": "block", "type": "divider", "divider": {}},
+        {
+            "object": "block", "type": "paragraph",
+            "paragraph": {
+                "rich_text": [{"type": "text", "text": {"content": f"Last updated: {ts}"}, "annotations": {"color": "gray", "italic": True}}]
+            },
+        },
+    ]
+
+    requests.patch(
+        f"https://api.notion.com/v1/blocks/{STATS_PAGE}/children",
+        headers=headers(), json={"children": blocks}, timeout=15
+    )
 
 
 def push_history_entry(entry):
@@ -164,10 +234,14 @@ def build():
         except Exception as e:
             print(f"[notion] crypto prices error: {e}")
 
+    usd_thb = latest["usd_thb_rate"] if latest else 33.0
+
     # Push to Notion
     if latest:
         push_history_entry(latest)
         print(f"[notion] pushed history entry {latest['ts']}")
+        push_stats_page(latest, usd_thb)
+        print("[notion] updated live stats page")
 
     push_holdings(holdings, stock_prices)
     print(f"[notion] pushed {len(holdings)} holdings")
