@@ -19,9 +19,11 @@ PORTFOLIO_PATH = os.path.join(BASE_DIR, "data", "portfolio.json")
 HISTORY_PATH = os.path.join(BASE_DIR, "data", "history.json")
 
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN", "")
-DB_HISTORY = os.environ.get("NOTION_DB_HISTORY", "")
-DB_HOLDINGS = os.environ.get("NOTION_DB_HOLDINGS", "")
-DB_CRYPTO = os.environ.get("NOTION_DB_CRYPTO", "")
+# My Dashboard databases (primary)
+DB_HISTORY  = os.environ.get("NOTION_DB_HISTORY",  "3b06e648-e512-8111-8111-c7133a51a6ef")
+DB_HOLDINGS = os.environ.get("NOTION_DB_HOLDINGS", "3b06e648-e512-815b-8117-e8bf2e2f9398")
+DB_CRYPTO   = os.environ.get("NOTION_DB_CRYPTO",   "3b06e648-e512-81c1-8d09-c3f1023f2502")
+DASHBOARD_PAGE = os.environ.get("NOTION_DASHBOARD_PAGE", "3b06e648-e512-811b-978b-fbdea7ca0ce0")
 STATS_PAGE = os.environ.get("NOTION_STATS_PAGE", "3b06e648-e512-8174-9a14-ebc9ec99a0ae")
 
 BINANCE_API_KEY = os.environ.get("BINANCE_API_KEY", "")
@@ -179,6 +181,67 @@ def push_crypto(balances, crypto_prices_thb):
         })
 
 
+def update_dashboard_kpi(latest, usd_thb):
+    """Update the KPI heading_1 and callouts in the left column of My Dashboard."""
+    total = latest["total_thb"]
+    cash = latest["cash_thb"]
+    stocks_etf = latest["stocks_thb"] + latest["etf_thb"]
+    crypto = latest["crypto_thb"]
+    total_usd = total / usd_thb if usd_thb else 0
+    ts = latest["ts"]
+
+    # Find left column inside the column_list on the dashboard page
+    r = requests.get(f"https://api.notion.com/v1/blocks/{DASHBOARD_PAGE}/children", headers=headers(), timeout=15)
+    blocks = r.json().get("results", [])
+
+    col_list = next((b for b in blocks if b["type"] == "column_list"), None)
+    if not col_list:
+        return
+
+    r2 = requests.get(f"https://api.notion.com/v1/blocks/{col_list['id']}/children", headers=headers(), timeout=15)
+    columns = r2.json().get("results", [])
+    if not columns:
+        return
+    left_col_id = columns[0]["id"]
+
+    r3 = requests.get(f"https://api.notion.com/v1/blocks/{left_col_id}/children", headers=headers(), timeout=15)
+    left_blocks = r3.json().get("results", [])
+
+    updates = {
+        "heading_1": f"฿{total:,}",
+        "paragraph_gray": f"Net Worth  ·  ~${total_usd:,.0f} USD",
+        "callout_blue": f"Stocks & ETF  ·  ฿{stocks_etf:,}",
+        "callout_purple": f"Crypto  ·  ฿{crypto:,}",
+        "callout_gray": f"Cash  ·  ฿{cash:,}",
+        "paragraph_updated": f"Updated {ts[:10]}",
+    }
+
+    type_map = ["heading_1", "paragraph", "divider", "callout", "callout", "callout", "divider", "paragraph"]
+    text_values = [
+        updates["heading_1"], updates["paragraph_gray"], None,
+        updates["callout_blue"], updates["callout_purple"], updates["callout_gray"],
+        None, updates["paragraph_updated"],
+    ]
+
+    for block, text in zip(left_blocks, text_values):
+        if text is None:
+            continue
+        t = block["type"]
+        rt = [{"type": "text", "text": {"content": text}}]
+        if t == "heading_1":
+            rt[0]["annotations"] = {"bold": True}
+        elif t == "paragraph" and "gray" in text:
+            rt[0]["annotations"] = {"color": "gray"}
+        elif t == "paragraph":
+            rt[0]["annotations"] = {"color": "gray", "italic": True}
+        requests.patch(
+            f"https://api.notion.com/v1/blocks/{block['id']}",
+            headers=headers(),
+            json={t: {"rich_text": rt}},
+            timeout=15,
+        )
+
+
 def build():
     if not NOTION_TOKEN:
         print("[notion] NOTION_TOKEN not set, skipping")
@@ -242,6 +305,8 @@ def build():
         print(f"[notion] pushed history entry {latest['ts']}")
         push_stats_page(latest, usd_thb)
         print("[notion] updated live stats page")
+        update_dashboard_kpi(latest, usd_thb)
+        print("[notion] updated My Dashboard KPI")
 
     push_holdings(holdings, stock_prices)
     print(f"[notion] pushed {len(holdings)} holdings")
