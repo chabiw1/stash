@@ -80,6 +80,16 @@ def push_history_entry(entry):
     })
 
 
+STOCK_DOMAINS = {
+    "AMZN": "amazon.com", "GOOG": "google.com", "META": "meta.com",
+    "MSFT": "microsoft.com", "NVDA": "nvidia.com", "TSLA": "tesla.com",
+    "RKLB": "rocketlabusa.com", "IONQ": "ionq.com", "PLTR": "palantir.com",
+    "RBLX": "roblox.com", "RGTI": "rigetti.com", "SMCI": "supermicro.com",
+    "IBM": "ibm.com", "CEG": "constellationenergy.com",
+    "SPY": "ssga.com", "SCHG": "schwab.com", "RSP": "invesco.com",
+}
+
+
 def push_holdings(holdings, stock_prices):
     archive_all(DB_HOLDINGS)
     for symbol, h in holdings.items():
@@ -87,7 +97,9 @@ def push_holdings(holdings, stock_prices):
         value_usd = h["shares"] * price
         cost = h.get("avg_cost_usd") or 0
         pnl_pct = (price - cost) / cost if cost else 0
-        notion_post("pages", {
+        domain = STOCK_DOMAINS.get(symbol)
+        icon = {"type": "external", "external": {"url": f"https://logo.clearbit.com/{domain}"}} if domain else None
+        page = {
             "parent": {"database_id": DB_HOLDINGS},
             "properties": {
                 "Symbol":        {"title": [{"text": {"content": symbol}}]},
@@ -98,7 +110,10 @@ def push_holdings(holdings, stock_prices):
                 "Value (USD)":   {"number": value_usd},
                 "P&L %":         {"number": pnl_pct},
             },
-        })
+        }
+        if icon:
+            page["icon"] = icon
+        notion_post("pages", page)
 
 
 def push_crypto(balances, crypto_prices_thb):
