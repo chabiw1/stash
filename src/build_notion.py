@@ -98,7 +98,7 @@ def push_holdings(holdings, stock_prices):
         cost = h.get("avg_cost_usd") or 0
         pnl_pct = (price - cost) / cost if cost else 0
         domain = STOCK_DOMAINS.get(symbol)
-        icon = {"type": "external", "external": {"url": f"https://logo.clearbit.com/{domain}"}} if domain else None
+        icon = {"type": "external", "external": {"url": f"https://www.google.com/s2/favicons?domain={domain}&sz=128"}} if domain else None
         page = {
             "parent": {"database_id": DB_HOLDINGS},
             "properties": {
