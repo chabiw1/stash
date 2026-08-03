@@ -65,32 +65,32 @@ def archive_all(db_id):
         )
 
 
-def history_date_exists(date_str):
+def find_history_page_id(date_str):
     pages = notion_query(DB_HISTORY)
     for p in pages:
         title_parts = p.get("properties", {}).get("Timestamp", {}).get("title", [])
         if title_parts and title_parts[0].get("plain_text", "") == date_str:
-            return True
-    return False
+            return p["id"]
+    return None
 
 
 def push_history_entry(entry):
     date_only = entry["ts"][:10]
-    if history_date_exists(date_only):
-        print(f"[notion] history {date_only} already exists, skipping")
+    props = {
+        "Timestamp":    {"title": [{"text": {"content": date_only}}]},
+        "Total (THB)":  {"number": entry["total_thb"]},
+        "Cash (THB)":   {"number": entry["cash_thb"]},
+        "Stocks (THB)": {"number": entry["stocks_thb"]},
+        "ETF (THB)":    {"number": entry["etf_thb"]},
+        "Crypto (THB)": {"number": entry["crypto_thb"]},
+        "USD/THB Rate": {"number": entry["usd_thb_rate"]},
+    }
+    existing_id = find_history_page_id(date_only)
+    if existing_id:
+        notion_patch(f"pages/{existing_id}", {"properties": props})
+        print(f"[notion] updated history {date_only}")
         return
-    notion_post("pages", {
-        "parent": {"database_id": DB_HISTORY},
-        "properties": {
-            "Timestamp":    {"title": [{"text": {"content": date_only}}]},
-            "Total (THB)":  {"number": entry["total_thb"]},
-            "Cash (THB)":   {"number": entry["cash_thb"]},
-            "Stocks (THB)": {"number": entry["stocks_thb"]},
-            "ETF (THB)":    {"number": entry["etf_thb"]},
-            "Crypto (THB)": {"number": entry["crypto_thb"]},
-            "USD/THB Rate": {"number": entry["usd_thb_rate"]},
-        },
-    })
+    notion_post("pages", {"parent": {"database_id": DB_HISTORY}, "properties": props})
 
 
 STOCK_DOMAINS = {
