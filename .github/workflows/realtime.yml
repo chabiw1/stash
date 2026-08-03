@@ -2,7 +2,7 @@ name: Realtime update
 
 on:
   schedule:
-    - cron: '0 21 * * *'   # 04:00 Bangkok (UTC+7), after US market close (4 PM ET)
+    - cron: '0 */2 * * *'
   workflow_dispatch:
 
 jobs:

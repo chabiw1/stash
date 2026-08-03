@@ -121,8 +121,10 @@ def push_crypto(balances, crypto_prices_thb):
     archive_all(DB_CRYPTO)
     for coin, qty in balances.items():
         price_thb = crypto_prices_thb.get(coin) or 0
+        icon_url = f"https://assets.coincap.io/assets/icons/{coin.lower()}@2x.png"
         notion_post("pages", {
             "parent": {"database_id": DB_CRYPTO},
+            "icon": {"type": "external", "external": {"url": icon_url}},
             "properties": {
                 "Coin":        {"title": [{"text": {"content": coin}}]},
                 "Total Qty":   {"number": qty},
