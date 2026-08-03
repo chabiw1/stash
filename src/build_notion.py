@@ -65,8 +65,20 @@ def archive_all(db_id):
         )
 
 
+def history_date_exists(date_str):
+    pages = notion_query(DB_HISTORY)
+    for p in pages:
+        title_parts = p.get("properties", {}).get("Timestamp", {}).get("title", [])
+        if title_parts and title_parts[0].get("plain_text", "") == date_str:
+            return True
+    return False
+
+
 def push_history_entry(entry):
     date_only = entry["ts"][:10]
+    if history_date_exists(date_only):
+        print(f"[notion] history {date_only} already exists, skipping")
+        return
     notion_post("pages", {
         "parent": {"database_id": DB_HISTORY},
         "properties": {
