@@ -79,14 +79,19 @@
       "asset_type": "etf"
     },
     "SCHG": {
-      "shares": 8.6065732,
-      "avg_cost_usd": 34.86,
+      "shares": 11.489062,
+      "avg_cost_usd": 34.804804237630535,
       "asset_type": "etf"
     },
     "SPY": {
       "shares": 0.9127607,
       "avg_cost_usd": 657.0,
       "asset_type": "etf"
+    },
+    "SPCX": {
+      "shares": 1.0,
+      "avg_cost_usd": 108.0,
+      "asset_type": "stock"
     }
   }
 }
