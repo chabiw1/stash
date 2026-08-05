@@ -38,31 +38,37 @@ def headers():
     }
 
 
+TIMEOUT = 30
+
+
 def notion_post(path, data):
-    r = requests.post(f"https://api.notion.com/v1/{path}", headers=headers(), json=data, timeout=15)
+    r = requests.post(f"https://api.notion.com/v1/{path}", headers=headers(), json=data, timeout=TIMEOUT)
     return r.json()
 
 
 def notion_query(db_id):
     r = requests.post(
         f"https://api.notion.com/v1/databases/{db_id}/query",
-        headers=headers(), json={}, timeout=15
+        headers=headers(), json={}, timeout=TIMEOUT
     )
     return r.json().get("results", [])
 
 
 def notion_patch(path, data):
-    r = requests.patch(f"https://api.notion.com/v1/{path}", headers=headers(), json=data, timeout=15)
+    r = requests.patch(f"https://api.notion.com/v1/{path}", headers=headers(), json=data, timeout=TIMEOUT)
     return r.json()
 
 
 def archive_all(db_id):
     pages = notion_query(db_id)
     for p in pages:
-        requests.patch(
-            f"https://api.notion.com/v1/pages/{p['id']}",
-            headers=headers(), json={"archived": True}, timeout=15
-        )
+        try:
+            requests.patch(
+                f"https://api.notion.com/v1/pages/{p['id']}",
+                headers=headers(), json={"archived": True}, timeout=TIMEOUT
+            )
+        except Exception as e:
+            print(f"[notion] archive warning (skipping): {e}")
 
 
 def find_history_page_id(date_str):
