@@ -99,16 +99,6 @@ def push_history_entry(entry):
     notion_post("pages", {"parent": {"database_id": DB_HISTORY}, "properties": props})
 
 
-STOCK_DOMAINS = {
-    "AMZN": "amazon.com", "GOOG": "google.com", "META": "meta.com",
-    "MSFT": "microsoft.com", "NVDA": "nvidia.com", "TSLA": "tesla.com",
-    "RKLB": "rocketlabusa.com", "IONQ": "ionq.com", "PLTR": "palantir.com",
-    "RBLX": "roblox.com", "RGTI": "rigetti.com", "SMCI": "supermicro.com",
-    "IBM": "ibm.com", "CEG": "constellationenergy.com",
-    "SPY": "ssga.com", "SCHG": "schwab.com", "RSP": "invesco.com",
-}
-
-
 def push_holdings(holdings, stock_prices):
     archive_all(DB_HOLDINGS)
     for symbol, h in holdings.items():
@@ -116,10 +106,10 @@ def push_holdings(holdings, stock_prices):
         value_usd = h["shares"] * price
         cost = h.get("avg_cost_usd") or 0
         pnl_pct = (price - cost) / cost if cost else 0
-        domain = STOCK_DOMAINS.get(symbol)
-        icon = {"type": "external", "external": {"url": f"https://www.google.com/s2/favicons?domain={domain}&sz=128"}} if domain else None
-        page = {
+        icon_url = f"https://assets.parqet.com/logos/symbol/{symbol}?format=png"
+        notion_post("pages", {
             "parent": {"database_id": DB_HOLDINGS},
+            "icon": {"type": "external", "external": {"url": icon_url}},
             "properties": {
                 "Symbol":        {"title": [{"text": {"content": symbol}}]},
                 "Asset Type":    {"select": {"name": h.get("asset_type", "stock")}},
@@ -129,10 +119,7 @@ def push_holdings(holdings, stock_prices):
                 "Value (USD)":   {"number": value_usd},
                 "P&L %":         {"number": pnl_pct},
             },
-        }
-        if icon:
-            page["icon"] = icon
-        notion_post("pages", page)
+        })
 
 
 def push_crypto(balances, crypto_prices_thb):
