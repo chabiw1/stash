@@ -139,65 +139,22 @@ def push_crypto(balances, crypto_prices_thb):
         })
 
 
+KPI_TOTAL_BLOCK  = "4b6a44dd-d38d-49f3-9f23-1ea587dc2776"  # heading_3 net worth value
+KPI_TABLE_BLOCK  = "600fb81b-65e9-4b65-9f20-b9b04e1b0f8f"  # table_row Stocks/ETF/Crypto/Cash
+
+
 def update_dashboard_kpi(latest, usd_thb):
-    """Update the KPI heading_1 and callouts in the left column of My Dashboard."""
-    total = latest["total_thb"]
-    cash = latest["cash_thb"]
-    stocks_etf = latest["stocks_thb"] + latest["etf_thb"]
-    crypto = latest["crypto_thb"]
-    total_usd = total / usd_thb if usd_thb else 0
-    ts = latest["ts"]
-
-    # Find left column inside the column_list on the dashboard page
-    r = requests.get(f"https://api.notion.com/v1/blocks/{DASHBOARD_PAGE}/children", headers=headers(), timeout=15)
-    blocks = r.json().get("results", [])
-
-    col_list = next((b for b in blocks if b["type"] == "column_list"), None)
-    if not col_list:
-        return
-
-    r2 = requests.get(f"https://api.notion.com/v1/blocks/{col_list['id']}/children", headers=headers(), timeout=15)
-    columns = r2.json().get("results", [])
-    if not columns:
-        return
-    left_col_id = columns[0]["id"]
-
-    r3 = requests.get(f"https://api.notion.com/v1/blocks/{left_col_id}/children", headers=headers(), timeout=15)
-    left_blocks = r3.json().get("results", [])
-
-    updates = {
-        "heading_1": f"฿{total:,}",
-        "paragraph_gray": f"Net Worth  ·  ~${total_usd:,.0f} USD",
-        "callout_blue": f"Stocks & ETF  ·  ฿{stocks_etf:,}",
-        "callout_purple": f"Crypto  ·  ฿{crypto:,}",
-        "callout_gray": f"Cash  ·  ฿{cash:,}",
-        "paragraph_updated": f"Updated {ts[:10]}",
-    }
-
-    type_map = ["heading_1", "paragraph", "divider", "callout", "callout", "callout", "divider", "paragraph"]
-    text_values = [
-        updates["heading_1"], updates["paragraph_gray"], None,
-        updates["callout_blue"], updates["callout_purple"], updates["callout_gray"],
-        None, updates["paragraph_updated"],
-    ]
-
-    for block, text in zip(left_blocks, text_values):
-        if text is None:
-            continue
-        t = block["type"]
-        rt = [{"type": "text", "text": {"content": text}}]
-        if t == "heading_1":
-            rt[0]["annotations"] = {"bold": True}
-        elif t == "paragraph" and "gray" in text:
-            rt[0]["annotations"] = {"color": "gray"}
-        elif t == "paragraph":
-            rt[0]["annotations"] = {"color": "gray", "italic": True}
-        requests.patch(
-            f"https://api.notion.com/v1/blocks/{block['id']}",
-            headers=headers(),
-            json={t: {"rich_text": rt}},
-            timeout=15,
-        )
+    notion_patch(f"blocks/{KPI_TOTAL_BLOCK}", {
+        "heading_3": {"rich_text": [{"type": "text", "text": {"content": f"฿{latest['total_thb']:,}"}}]}
+    })
+    notion_patch(f"blocks/{KPI_TABLE_BLOCK}", {
+        "table_row": {"cells": [
+            [{"type": "text", "text": {"content": f"฿{latest['stocks_thb']:,}"}}],
+            [{"type": "text", "text": {"content": f"฿{latest['etf_thb']:,}"}}],
+            [{"type": "text", "text": {"content": f"฿{latest['crypto_thb']:,}"}}],
+            [{"type": "text", "text": {"content": f"฿{latest['cash_thb']:,}"}}],
+        ]}
+    })
 
 
 def build():
