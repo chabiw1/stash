@@ -1,6 +1,6 @@
 {
-  "statement_date": "2026-07-31",
-  "dime_cash_usd": 4.52,
+  "statement_date": "2026-08-31",
+  "dime_cash_usd": 95.35,
   "last_updated_dime": "",
   "holdings": {
     "AMZN": {
@@ -68,9 +68,9 @@
       "avg_cost_usd": 31.97,
       "asset_type": "stock"
     },
-    "TSLA": {
-      "shares": 0.5164601,
-      "avg_cost_usd": 290.4,
+    "SPCX": {
+      "shares": 1.0,
+      "avg_cost_usd": 108.0,
       "asset_type": "stock"
     },
     "RSP": {
@@ -80,18 +80,13 @@
     },
     "SCHG": {
       "shares": 11.489062,
-      "avg_cost_usd": 34.804804237630535,
+      "avg_cost_usd": 34.8,
       "asset_type": "etf"
     },
     "SPY": {
       "shares": 0.9127607,
       "avg_cost_usd": 657.0,
       "asset_type": "etf"
-    },
-    "SPCX": {
-      "shares": 1.0,
-      "avg_cost_usd": 108.0,
-      "asset_type": "stock"
     }
   }
 }
