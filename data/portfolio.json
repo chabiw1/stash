@@ -1,11 +1,11 @@
 {
-  "statement_date": "2026-08-31",
-  "dime_cash_usd": 95.35,
+  "statement_date": "2026-09-30",
+  "dime_cash_usd": 34.21,
   "last_updated_dime": "",
   "holdings": {
     "AMZN": {
-      "shares": 1.1219567000000001,
-      "avg_cost_usd": 252.96053505451678,
+      "shares": 1.1219568,
+      "avg_cost_usd": 252.9587447698521,
       "asset_type": "stock"
     },
     "CEG": {
@@ -45,7 +45,7 @@
     },
     "PLTR": {
       "shares": 1.1343958,
-      "avg_cost_usd": 176.02321179080528,
+      "avg_cost_usd": 176.02,
       "asset_type": "stock"
     },
     "RBLX": {
@@ -59,8 +59,8 @@
       "asset_type": "stock"
     },
     "RKLB": {
-      "shares": 2.5132133000000003,
-      "avg_cost_usd": 49.656984721909595,
+      "shares": 2.5132132,
+      "avg_cost_usd": 49.66,
       "asset_type": "stock"
     },
     "SMCI": {
@@ -80,18 +80,13 @@
     },
     "SCHG": {
       "shares": 18.3374145,
-      "avg_cost_usd": 35.249954921943875,
+      "avg_cost_usd": 35.25,
       "asset_type": "etf"
     },
     "SPY": {
       "shares": 0.9127607,
       "avg_cost_usd": 657.0,
       "asset_type": "etf"
-    },
-    "TSLA": {
-      "shares": 0.1326531,
-      "avg_cost_usd": 376.32,
-      "asset_type": "stock"
     }
   }
 }
